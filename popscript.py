@@ -1,19 +1,31 @@
 #!/usr/bin/env python3
+__author__ = 'MrSedan'
 import openpyxl, requests, re, os, xmltodict, pyexcel, datetime
 from openpyxl.styles import Alignment
 
-name = input("Имя файла: ").replace(".xlsx","")
+while True:
+    try:
+        name = input("Имя файла: ").replace(".xlsx","")
+        # Открытие исходной таблицы
+        wb = openpyxl.load_workbook(filename=f'./{name}.xlsx')
+        sheet = wb[wb.sheetnames[0]]
 
-# Открытие исходной таблицы
-wb = openpyxl.load_workbook(filename=f'./{name}.xlsx')
-sheet = wb[wb.sheetnames[0]]
-
-# Удаление измененной ранее таблицы(если она есть)
-if os.path.exists(f"./{name}Edited.xlsx"):
-    os.remove(f"./{name}Edited.xlsx")
+        # Удаление измененной ранее таблицы(если она есть)
+        if os.path.exists(f"./{name}Edited.xlsx"):
+            os.remove(f"./{name}Edited.xlsx")
+        print("Таблица успешно загружена!")
+        break
+    except PermissionError:
+        print("Ошибка! Возможно итоговая табица уже где-то открыта.")
 
 # Создание новой таблицы
-pyexcel.save_as(array=[["Города", "Даты", "Население"]], dest_file_name=f'{name}Edited.xlsx')
+wg = openpyxl.Workbook()
+wg.create_sheet('Лист1')
+wg.remove(wg['Sheet'])
+sh = wg['Лист1']
+for i,s in enumerate(["Города", "Даты", "Население"]):
+    sh.cell(column=i+1,row=1).value = s
+wg.save(f"./{name}Edited.xlsx")
 
 # Определение доп. данных
 max_row = len(sheet["B"])
@@ -34,8 +46,9 @@ for i in sheet[f"{a}:{b}"]:
         f"https://ru.wikipedia.org/w/api.php?format=xml&action=query&list=search&srwhat=text&srsearch={val}")
     doc = xmltodict.parse(data.text)  # Парсинг ответа
     sear = [i['@title'] for i in doc['api']['query']['search']['p'] if  # Выборка возможных страниц
-            i['@title'].startswith(val) and "(штат)" not in i['@title']]
+            i['@title'].startswith(val) and "(штат)" not in i['@title'] and 'район' not in i['@title']]
     ser = []
+    f = []
     for j in sear:
         try:
             data = requests.get(f"https://ru.wikipedia.org/wiki/{j}")  # Получение кода страницы
@@ -45,16 +58,14 @@ for i in sheet[f"{a}:{b}"]:
             ser.append(sert.group(0).replace("</span>", "").replace("&#160;", "").replace("<sup", "").replace("челов",          # Поиск числа и очистка от лишнего
                                                                                                         "").replace(            #
                 "\"nowrap\">", ""))
+            f.append(j)
         except:
             continue
             pass
     for k,t in enumerate(ser):
         sheet1.cell(column=col + 2, row=row).value = int(t)
-        sheet1.cell(column=col + 2, row=row).number_format = "0 000"
-        if len(ser) > 1:
-            sheet1.cell(column=col, row=row).value = f"{val}{k+1}"
-        else:
-            sheet1.cell(column=col, row=row).value = val
+        sheet1.cell(column=col + 2, row=row).number_format = "# ### ##0"
+        sheet1.cell(column=col, row=row).value = f[k]
         sheet1.cell(column=col + 1, row=row).value = date+'.'+str(datetime.datetime.now().year)[-2:]
         sheet1.cell(column=col + 1, row=row).alignment = Alignment(horizontal='right')
         row += 1
