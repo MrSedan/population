@@ -29,8 +29,8 @@ wg.save(f"./{name}Edited.xlsx")
 
 # Определение доп. данных
 max_row = len(sheet["A"])
-a = "A27"
-b = f"A77"
+a = "A3"
+b = f"A26"
 col = 1
 row = 2
 
@@ -45,8 +45,11 @@ for i in sheet[f"{a}:{b}"]:
     data = requests.get(  # Запрос к Wikipedia
         f"https://ru.wikipedia.org/w/api.php?format=xml&action=query&list=search&srwhat=text&srsearch={val.split(' ',1)[1]}")
     doc = xmltodict.parse(data.text)  # Парсинг ответа
-    sear = [i['@title'] for i in doc['api']['query']['search']['p'] if  # Выборка возможных страниц
-            i['@title'].startswith(val.split(' ',1)[1]) and "(штат)" not in i['@title'] and 'район' not in i['@title']]
+    try:
+        sear = [i['@title'] for i in doc['api']['query']['search']['p'] if  # Выборка возможных страниц
+                i['@title'].startswith(val.split(' ',1)[1]) and "(штат)" not in i['@title'] and 'район' not in i['@title']]
+    except:
+        continue
     ser = []
     f = []
     for j in sear:
@@ -57,7 +60,7 @@ for i in sheet[f"{a}:{b}"]:
             sert = re.search(r'(</span>|\"nowrap\">)+(\d{1,3}(?:\S*\d{3})*)(&#160;челов|<sup)', text[1])                        #
             ser.append(sert.group(0).replace("</span>", "").replace("&#160;", "").replace("<sup", "").replace("челов",          # Поиск числа и очистка от лишнего
                                                                                                         "").replace(            #
-                "\"nowrap\">", ""))
+                "\"nowrap\">", "").split('<')[0])
             f.append(j)
         except:
             continue
@@ -66,7 +69,7 @@ for i in sheet[f"{a}:{b}"]:
         sheet1.cell(column=col + 2, row=row).value = int(t)
         sheet1.cell(column=col + 2, row=row).number_format = "# ### ##0"
         sheet1.cell(column=col, row=row).value = val
-        sheet1.cell(column=col+3, row=row).value = f[k]
+        sheet1.cell(column=col+4, row=row).value = f[k]
         sheet1.cell(column=col + 1, row=row).value = date
         sheet1.cell(column=col + 1, row=row).alignment = Alignment(horizontal='right')
         row += 1
