@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 __author__ = 'MrSedan'
-import openpyxl, requests, re, os, xmltodict, pyexcel, datetime
+import openpyxl, requests, re, os, xmltodict, datetime
 from openpyxl.styles import Alignment
 
 while True:
@@ -28,9 +28,9 @@ for i,s in enumerate(["Города", "Даты", "Население"]):
 wg.save(f"./{name}Edited.xlsx")
 
 # Определение доп. данных
-max_row = len(sheet["B"])
-a = "B1"
-b = f"B{max_row}"
+max_row = len(sheet["A"])
+a = "A27"
+b = f"A77"
 col = 1
 row = 2
 
@@ -41,12 +41,12 @@ sheet1 = wb2[wb2.sheetnames[0]]
 for i in sheet[f"{a}:{b}"]:
     if not i[0].value: continue  # Пропуск пустых строк
     val = i[0].value
-    date = sheet.cell(column=1, row=i[0].row).value
+    date = sheet.cell(column=3, row=i[0].row).value
     data = requests.get(  # Запрос к Wikipedia
-        f"https://ru.wikipedia.org/w/api.php?format=xml&action=query&list=search&srwhat=text&srsearch={val}")
+        f"https://ru.wikipedia.org/w/api.php?format=xml&action=query&list=search&srwhat=text&srsearch={val.split(' ',1)[1]}")
     doc = xmltodict.parse(data.text)  # Парсинг ответа
     sear = [i['@title'] for i in doc['api']['query']['search']['p'] if  # Выборка возможных страниц
-            i['@title'].startswith(val) and "(штат)" not in i['@title'] and 'район' not in i['@title']]
+            i['@title'].startswith(val.split(' ',1)[1]) and "(штат)" not in i['@title'] and 'район' not in i['@title']]
     ser = []
     f = []
     for j in sear:
@@ -65,8 +65,9 @@ for i in sheet[f"{a}:{b}"]:
     for k,t in enumerate(ser):
         sheet1.cell(column=col + 2, row=row).value = int(t)
         sheet1.cell(column=col + 2, row=row).number_format = "# ### ##0"
-        sheet1.cell(column=col, row=row).value = f[k]
-        sheet1.cell(column=col + 1, row=row).value = date+'.'+str(datetime.datetime.now().year)[-2:]
+        sheet1.cell(column=col, row=row).value = val
+        sheet1.cell(column=col+3, row=row).value = f[k]
+        sheet1.cell(column=col + 1, row=row).value = date
         sheet1.cell(column=col + 1, row=row).alignment = Alignment(horizontal='right')
         row += 1
     # Запись новых данных в таблицу
