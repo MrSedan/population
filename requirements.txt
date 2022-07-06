@@ -6,7 +6,7 @@ et-xmlfile==1.0.1
 idna==2.8
 jdcal==1.4.1
 lml==0.0.9
-lxml==4.4.2
+lxml==4.9.1
 openpyxl==3.0.3
 pyexcel==0.5.15
 pyexcel-io==0.5.20
