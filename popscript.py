@@ -1,11 +1,18 @@
-#!/usr/bin/env python3
-__author__ = 'MrSedan'
-import openpyxl, requests, re, os, xmltodict, datetime
+import openpyxl
+import requests
+import re
+import os
+import xmltodict
+import datetime
 from openpyxl.styles import Alignment
 
 while True:
     try:
         name = input("Имя файла: ").replace(".xlsx","")
+        # Проверка существования исходной таблицы
+        if not os.path.exists(f"./{name}.xlsx"):
+            print("Ошибка! Таблица не существует.")
+            continue
         # Открытие исходной таблицы
         wb = openpyxl.load_workbook(filename=f'./{name}.xlsx')
         sheet = wb[wb.sheetnames[0]]
@@ -16,69 +23,79 @@ while True:
         print("Таблица успешно загружена!")
         break
     except PermissionError:
-        print("Ошибка! Возможно итоговая табица уже где-то открыта.")
+        print("Ошибка! Возможно итоговая таблица уже где-то открыта.")
+    except Exception as e:
+        print(f"Ошибка! {e}")
 
 # Создание новой таблицы
-wg = openpyxl.Workbook()
-wg.create_sheet('Лист1')
-wg.remove(wg['Sheet'])
-sh = wg['Лист1']
-for i,s in enumerate(["Города", "Даты", "Население"]):
-    sh.cell(column=i+1,row=1).value = s
-wg.save(f"./{name}Edited.xlsx")
+new_wb = openpyxl.Workbook()
+new_wb.create_sheet('Лист1')
+new_wb.remove(new_wb['Sheet'])
+new_sheet = new_wb['Лист1']
+for i,col in enumerate(["Города", "Даты", "Население", "Название страницы Википедии", "Ссылка на страницу Википедии"]):
+    new_sheet.cell(column=i+1,row=1).value = col
+new_wb.save(f"./{name}Edited.xlsx")
 
 # Определение доп. данных
 max_row = len(sheet["A"])
-a = "A3"
-b = f"A26"
+start_cell = "A3"
+end_cell = f"A26"
 col = 1
 row = 2
 
 # Открытие пустой таблицы
-wb2 = openpyxl.load_workbook(filename=f'./{name}Edited.xlsx')
-sheet1 = wb2[wb2.sheetnames[0]]
+new_wb = openpyxl.load_workbook(filename=f'./{name}Edited.xlsx')
+new_sheet = new_wb[new_wb.sheetnames[0]]
 
-for i in sheet[f"{a}:{b}"]:
-    if not i[0].value: continue  # Пропуск пустых строк
-    val = i[0].value
-    date = sheet.cell(column=3, row=i[0].row).value
-    data = requests.get(  # Запрос к Wikipedia
-        f"https://ru.wikipedia.org/w/api.php?format=xml&action=query&list=search&srwhat=text&srsearch={val.split(' ',1)[1]}")
-    doc = xmltodict.parse(data.text)  # Парсинг ответа
-    try:
-        sear = [i['@title'] for i in doc['api']['query']['search']['p'] if  # Выборка возможных страниц
-                i['@title'].startswith(val.split(' ',1)[1]) and "(штат)" not in i['@title'] and 'район' not in i['@title']]
-    except:
+# Регулярное выражение для удаления ненужных символов в строке с населением
+re_population = re.compile(r'(\d[\d ]*\d|\d+)')
+
+for cells in sheet[f"{start_cell}:{end_cell}"]:
+    if not cells[0].value: 
+        # Пропуск пустых строк
         continue
-    ser = []
-    f = []
-    for j in sear:
+    city_name = cells[0].value
+    date = sheet.cell(column=3, row=cells[0].row).value
+    wikipedia_data = requests.get(f"https://ru.wikipedia.org/w/api.php?format=xml&action=query&list=search&srwhat=text&srsearch={city_name.split(' ',1)[1]}")
+    wiki_doc = xmltodict.parse(wikipedia_data.text)
+    try:
+        # Парсинг возможных страниц с населением
+        search_pages = [page['@title'] for page in wiki_doc['api']['query']['search']['p'] if page['@title'].startswith(city_name.split(' ',1)[1]) and "(штат)" not in page['@title'] and 'район' not in page['@title']]
+    except Exception:
+        continue
+    for page_title in search_pages:
         try:
-            data = requests.get(f"https://ru.wikipedia.org/wiki/{j}")  # Получение кода страницы
-            text = re.split(r'<th class="plainlist" style="width:40%;">Население</th>', data.text)                              #
-            text[1] = text[1].replace("&#160;", "").replace(" ", "")                                                            #
-            sert = re.search(r'(</span>|\"nowrap\">)+(\d{1,3}(?:\S*\d{3})*)(&#160;челов|<sup)', text[1])                        #
-            ser.append(sert.group(0).replace("</span>", "").replace("&#160;", "").replace("<sup", "").replace("челов",          # Поиск числа и очистка от лишнего
-                                                                                                        "").replace(            #
-                "\"nowrap\">", "").split('<')[0])
-            f.append(j)
-        except:
+            page_data = requests.get(f"https://ru.wikipedia.org/wiki/{page_title}")
+            population_data = re_population.findall(page_data.text)
+            population = int(population_data[0].replace(' ',''))
+            wikipedia_link = f"https://ru.wikipedia.org/wiki/{page_title}"
+            # Запись данных в новую таблицу
+            new_sheet.cell(column=col, row=row).value = city_name
+            new_sheet.cell(column=col+1, row=row).value = date
+            new_sheet.cell(column=col+1, row=row).alignment = Alignment(horizontal='right')
+            new_sheet.cell(column=col+2, row=row).value = population
+            new_sheet.cell(column=col+2, row=row).number_format = "# ### ##0"
+            new_sheet.cell(column=col+3, row=row).value = page_title
+            new_sheet.cell(column=col+4, row=row).value = wikipedia_link
+            row += 1
+            break
+        except Exception as e:
             continue
-            pass
-    for k,t in enumerate(ser):
-        sheet1.cell(column=col + 2, row=row).value = int(t)
-        sheet1.cell(column=col + 2, row=row).number_format = "# ### ##0"
-        sheet1.cell(column=col, row=row).value = val
-        sheet1.cell(column=col+4, row=row).value = f[k]
-        sheet1.cell(column=col + 1, row=row).value = date
-        sheet1.cell(column=col + 1, row=row).alignment = Alignment(horizontal='right')
+    else:
+        # Если ни одна страница не подошла
+        new_sheet.cell(column=col, row=row).value = city_name
+        new_sheet.cell(column=col+1, row=row).value = date
+        new_sheet.cell(column=col+1, row=row).alignment = Alignment(horizontal='right')
+        new_sheet.cell(column=col+2, row=row).value = "Данные не найдены"
         row += 1
-    # Запись новых данных в таблицу
 
-sheet1['A1'].alignment = Alignment(horizontal='center')
-sheet1['B1'].alignment = Alignment(horizontal='center')
-sheet1['C1'].alignment = Alignment(horizontal='center')
+# Настройка выравнивания ячеек
+new_sheet['A1'].alignment = Alignment(horizontal='center')
+new_sheet['B1'].alignment = Alignment(horizontal='center')
+new_sheet['C1'].alignment = Alignment(horizontal='center')
+new_sheet['D1'].alignment = Alignment(horizontal='center')
+new_sheet['E1'].alignment = Alignment(horizontal='center')
 
 # Сохранение полученной таблицы
-wb2.save(f"./{name}Edited.xlsx")
+new_wb.save(f"./{name}Edited.xlsx")
 print("Готово!")
